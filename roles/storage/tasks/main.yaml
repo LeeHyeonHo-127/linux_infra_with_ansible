@@ -1,0 +1,105 @@
+---
+- name: Check Device Status
+  parted:
+    device: "{{ nfs_device }}"
+    state: info
+  register: device_info
+
+- name: Set partition of disk
+  parted:
+    device: "{{ nfs_device }}"
+    number: 1
+    state: present
+    fstype: ext4
+  when: device_info.partitions is undefined
+
+- name: Check if filesystem exists
+  command: blkid -s TYPE -o value {{ device_partitioned }}
+  register: fs_type
+  changed_when: false
+  failed_when: false
+
+- name: Create ext4 filesystem on {{ device_partitioned }} if not already formatted
+  filesystem:
+    fstype: ext4
+    dev: "{{ device_partitioned }}"
+  when: fs_type.stdout == ""
+
+- name: install nfs-utils
+  yum:
+    name: nfs-utils
+    state: present
+
+- name: Enable service
+  service:
+    name: nfs-server
+    state: started
+    enabled: yes
+
+- name: Configure firewall for nfs #We wil change the port to listen on 8080
+  firewalld:
+    service: nfs 
+    permanent: yes
+    state: enabled
+
+- name: Configure firewall for nfs #We wil change the port to listen on 8080
+  firewalld:
+    port: 2049/tcp
+    permanent: yes
+    state: enabled
+
+- name: Restart firewall service to apply rules
+  service:
+    name: firewalld
+    state: restarted
+
+- name: Check mount point directory
+  stat:
+      path: "{{ item.path }}"
+  register: mount_point_info
+  loop: "{{ nfs_export_directories }}"
+  loop_control:
+    loop_var: item
+
+- name: Create Mount Points
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: user
+    group: user
+    mode: '0755'
+  loop: "{{ nfs_export_directories }}"
+  loop_control:
+    loop_var: item
+
+- name: Mount device to mount points
+  mount:
+    name: "{{ item.path }}"
+    src: "{{ nfs_device }}"
+    state: present
+    fstype: ext4
+    opts: defaults
+  loop: "{{ nfs_export_directories }}"
+  loop_control:
+    loop_var: item
+    
+- name: Export NFS directories
+  lineinfile:
+    path: /etc/exports
+    line: "{{ item.path }} {{item.export_to}}(rw,sync,no_root_squash)"
+    insertafter: EOF
+    state: present
+  loop: "{{ nfs_export_directories }}"
+  loop_control:
+    loop_var: item
+
+- name: Restart NFS Servoce
+  service:
+    name: nfs-server
+    state: restarted
+
+
+
+
+
+

@@ -1,0 +1,12 @@
+---
+# The variables file used by the playbooks in the storage group.
+# These don't have to be explicitly imported by vars_files: they are autopopulated
+nfs_device: "/dev/sdb"
+device_partitioned: "/dev/sdb1"
+nfs_export_directories:
+  - path: "/srv/nfs/web01"
+    export_to: "192.168.56.21"
+  - path: "/srv/nfs/wp01"
+    export_to: "192.168.56.21"
+  - path: "/srv/nfs/web02"
+    export_to: "192.168.56.22"

@@ -1,0 +1,15 @@
+---
+- name: key pass
+  hosts:
+    - loadbalancer
+    - webserver01
+    - webserver02
+    - storage
+    - db
+  tasks:
+    - name: id_rsa key pass
+      ansible.posix.authorized_key:
+        user: user
+        state: present
+        key:  "{{ lookup('file', '/home/user/.ssh/id_rsa.pub') }}"
+        

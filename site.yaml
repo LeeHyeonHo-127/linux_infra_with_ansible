@@ -1,0 +1,16 @@
+---
+- name: apply common configuration all nodes
+  hosts: all
+  remote_user: user
+
+  roles:
+    - common
+
+- name: configuration and deploy the nfs server(storage)
+  hosts: storage
+  remote_user: user
+  vars_files:
+    - global_vars/storage/storage.yaml 
+
+  roles:
+    - storage
