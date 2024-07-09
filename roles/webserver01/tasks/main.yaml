@@ -1,0 +1,3 @@
+---
+- include: Web01_setup.yaml
+- include: Web01_apache_setup.yaml

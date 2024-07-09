@@ -14,3 +14,14 @@
 
   roles:
     - storage
+
+- name: deploy MySQL and configure the databases
+  hosts: db
+  remote_user: user
+  var_files:
+    - global_vars/db/db.yaml
+    - global_vars/db/db_user_password.yaml
+    - global_vars/db/mysql_root_password.yaml
+
+  roles:
+    - db

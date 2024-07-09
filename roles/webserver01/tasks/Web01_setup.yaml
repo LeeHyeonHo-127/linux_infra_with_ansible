@@ -1,0 +1,45 @@
+---
+- name: Setup Web-01 Servers
+  hosts: Web-01
+  become: true
+
+  tasks:
+    - name: Ensure default gateway is set to 10.0.2.2
+      command: ip route
+      register: gateway_check
+      ignore_errors: true
+
+    - name: Set default gateway to 10.0.2.2
+      command: ip route add default via 10.0.2.2 dev enp0s3 proto static metric 100
+      when: gateway_check.stdout.find("default via 10.0.2.2") == -1
+
+    - name: Install Apache Web Server
+      yum:
+        name: httpd
+        state: present
+
+    - name: Start Apache service
+      service:
+        name: httpd
+        state: started
+        enabled: yes
+
+    - name: Create NFS directories for Web Servers
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - /srv/web/web01
+        - /srv/web/wp01
+
+    - name: Install PHP for WordPress
+      yum:
+        name:
+        - php
+        - php-mysqlnd
+        state: present
+
+    - name: Download WordPress
+      get_url:
+        url: "https://wordpress.org/{{ wordpress_version }}.tar.gz"
+        dest: /tmp/wordpress.tar.gz

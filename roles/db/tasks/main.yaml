@@ -1,0 +1,88 @@
+---
+- name: DBServer Setup
+  hosts: dbserver
+  become: true
+  tasks:
+    - name: Ensure pip is installed
+      yum: 
+        name: python3-pip
+        state: present
+    
+    - name: Install MariaDB's package
+      yum:
+        name: mariadb-server,python3-pip,python3-PyMySQL
+        state: present
+
+    - name: start mysql server
+      action: service name=mariadb state=started enabled=true
+    
+    - name: Change mariadb root password
+      shell: mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'dlgusgh123';"
+    
+    - name: update mysql root password
+      mysql_user:
+         login_user: root
+         login_password: dlgusgh123
+         name: root
+         host: "192.168.56.*"
+         password: "{{ db_user_password }}"
+         check_implicit_admin: yes
+         priv: "*.*:ALL,GRANT"
+
+
+    - name: setting bind
+      lineinfile:
+        path: "/etc/my.cnf.d/mariadb-server.cnf"
+        insertafter: '#^bind-address=0.0.0.0'
+        line: "bind-address=0.0.0.0"
+        state: present
+    
+    - name: restart db
+      service:
+        name: mariadb
+        state: restarted
+
+    # - name: Check if database exists
+    #   shell: "mysql -u root -e 'SHOW DATABASES LIKE \"{{ db_name }}\";'"
+    #   register: db_exists
+    #   ignore_errors: true
+
+    # - name: Create Database
+    #   shell: "mysql -u root -e 'CREATE DATABASE {{ db_name }};'"
+    #   when: db_exists.stdout.find(db_name) == -1
+    #   become: true
+    #   become_user: root
+
+    # - name: Create DB User and Grant Privileges
+    #   shell: >
+    #     mysql -u root -e "GRANT ALL PRIVILEGES ON {{ db_name }}.* TO '{{ db_user }}'@'192.168.56.*' IDENTIFIED BY '{{ db_user_password }}'; FLUSH PRIVILEGES;"
+    #   become: true
+    #   become_user: root
+
+    - name: create a new db
+      mysql_db:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        name: "{{ db_name }}"
+        state: present
+
+    - name: delete anonymouse user
+      mysql_user:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        name: ""
+        host_all: yes
+        state: absent
+
+    - name: create a new user
+      mysql_user:
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        name: "{{ db_user }}"
+        password: "{{ db_user_password }}"
+        priv: "*.*:ALL,GRANT"
+        host: "192.168.56.*"
+        state: present

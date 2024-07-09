@@ -1,0 +1,8 @@
+---
+ansible_python_interpreter: /usr/bin/python3
+db_name: "wordpress_db"
+db_user: "wordpress_user"
+mysql_collation: utf8mb4_unicode_ci
+mysql_encoding: utf8mb4
+mysql_bind_address: 0.0.0.0
+mysql_max_connections: 200

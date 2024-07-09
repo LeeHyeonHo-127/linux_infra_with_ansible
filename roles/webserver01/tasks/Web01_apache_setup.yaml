@@ -1,0 +1,175 @@
+---
+- name: Configure Web-01 Server
+  hosts: Web-01
+  become: true
+  
+  vars:
+    web_server_name: "192.168.56.21"
+    apache_port: 8080
+    wp_port: 80
+    web01_document_root: "/srv/web/web01/"
+    wp01_document_root: "/srv/web/wp01/"
+    wp_site_url: "http://wordpress.example.com/"
+    wp_db: "wordpress_db"
+    wp_user: "wordpress_user"
+    wp_password: "wordpress_P@ssw0rd"
+    database_host: "192.168.56.40"
+
+  tasks:
+    - name: Install nfs client
+      dnf:
+        name: 
+        - nfs-utils
+        - nfsv4-client-utils
+        state: present
+
+    - name: Start and enable NFS service
+      service:
+        name: nfs-server
+        state: started
+        enabled: yes
+
+    - name: Add firewall rule for NFS (permanent)
+      firewalld:
+        service: nfs
+        permanent: yes
+        state: enabled
+
+    - name: Add firewall rule for httpd (permanent)
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+
+    - name: Add firewall rule for custom port (permanent)
+      firewalld:
+        port: "{{ apache_port }}/tcp"
+        permanent: yes
+        state: enabled
+
+    - name: Restart firewalld to apply permanent rules
+      service:
+        name: firewalld
+        state: restarted
+
+    - name: Mount NFS directory for apache website
+      mount:
+        src: "192.168.56.30:/srv/nfs/web01"
+        path: "{{ web01_document_root }}"
+        fstype: nfs
+        opts: "defaults"
+        state: mounted
+      tags: nfs_mount
+
+    - name: Mount NFS directory for WordPress site
+      mount:
+        src: "192.168.56.30:/srv/nfs/wp01"
+        path: "{{ wp01_document_root }}"
+        fstype: nfs
+        opts: "defaults"
+        state: mounted
+      tags: nfs_mount
+
+    - name: Configure Apache VirtualHost for apache website
+      template:
+        src: templates/web01_virtualhost.conf.j2
+        dest: /etc/httpd/conf.d/web01.conf
+      tags: web01_virtualhost
+
+    - name: Install tar
+      yum:
+        name: tar
+        state: present
+
+    - name: Create index.html file for Web Server information
+      template:
+        src: templates/index.html.j2
+        dest: "{{ web01_document_root }}index.html"
+      vars:
+        domain: "example.com"
+        ip_address: "192.168.56.21"
+        server_name: "Web-01"
+
+    - name: Check if the 'wordpress' directory exists
+      stat:
+        path: "/srv/web/wp01/wordpress"
+      register: wordpress_dir
+
+    - name: Extract and untar WordPress archive
+      unarchive:
+        src: /tmp/wordpress.tar.gz
+        dest: /srv/web/wp01/
+        remote_src: yes
+      when: not wordpress_dir.stat.exists
+
+    - name: Set permissions and ownership for WordPress directory
+      file:
+        path: "/srv/web/wp01/wordpress"
+        mode: "0757"
+        owner: "apache"
+        group: "apache"
+        recurse: yes
+      become: true
+
+    - name: Get the mode of wp-config-sample.php
+      stat:
+        path: "/srv/web/wp01/wordpress/wp-config-sample.php"
+      register: wp_config_sample_stat
+
+    - name: Copy wp-config-sample.php to wp-config.php
+      copy:
+        src: "/srv/web/wp01/wordpress/wp-config-sample.php"
+        dest: "/srv/web/wp01/wordpress/wp-config.php"
+        remote_src: yes
+        mode: "{{ wp_config_sample_stat.stat.mode }}"
+        owner: "apache"
+        group: "apache"
+
+    - name: Update wp-config.php
+      lineinfile:
+        path: "/srv/web/wp01/wordpress/wp-config.php"
+        regexp: "^define\\(\\s*'{{ item.name }}',"
+        line: "define('{{ item.name }}', '{{ item.value }}');"
+        state: present
+      loop:
+        - { name: 'DB_NAME', value: '{{ wp_db }}' }
+        - { name: 'DB_USER', value: '{{ wp_user }}' }
+        - { name: 'DB_PASSWORD', value: '{{ wp_password }}' }
+        - { name: 'DB_HOST', value: '{{ database_host }}' }
+      loop_control:
+        loop_var: item
+
+    - name: Configure Apache VirtualHost for wordpress website
+      template:
+        src: templates/wp01_virtualhost.conf.j2
+        dest: /etc/httpd/conf.d/wp01.conf
+
+    - name: Set permissions and ownership with web directory
+      file:
+        path: "/srv/web/web01/"
+        mode: "0757"
+        owner: "apache"
+        group: "apache"
+        recurse: yes
+      become: true
+
+    - name: Ensure SELinux allows Apache to make network connections
+      command: "setsebool -P httpd_can_network_connect 1"
+      become: true
+
+    - name: Restore SELinux context for web01 document root
+      command: "restorecon -Rv {{ web01_document_root }}"
+      become: true
+
+    - name: Set SELinux context for NFS shared directory
+      command: "sudo setsebool -P httpd_use_nfs 1"
+      become: true
+
+    - name: Set Selinux DB
+      command: "sudo setsebool httpd_can_network_connect_db=1"
+      become: true
+
+    - name: Restart Apache
+      service:
+        name: httpd
+        state: restarted

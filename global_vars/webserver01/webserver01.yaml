@@ -1,0 +1,11 @@
+---
+wordpress_version: "latest"
+web_server_name: "192.168.56.21"
+apache_port: 8080
+wp_port: 80
+web01_document_root: "/srv/web/web01/"
+wp01_document_root: "/srv/web/wp01/"
+wp_site_url: "http://wordpress.example.com/"
+wp_db: "wordpress_db"
+wp_user: "wordpress_user"
+database_host: "192.168.56.40"
